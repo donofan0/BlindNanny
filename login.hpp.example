@@ -1,0 +1,12 @@
+#pragma once
+
+// --------------------------------------------------------------------------
+// NETWORK & MQTT CONFIGURATION
+// --------------------------------------------------------------------------
+#define WIFI_SSID "SSID"
+#define WIFI_PASSWORD "PASSWORD"
+
+#define MQTT_SERVER "SERVER"
+#define MQTT_PORT 1883
+#define MQTT_USER "USERNAME"
+#define MQTT_PASSWORD "PASSWORD" 

@@ -1,0 +1,3 @@
+[submodule ".devcontainer/claude-dev-base"]
+	path = .devcontainer/claude-dev-base
+	url = pixonngit@51.38.65.120:repositories/claude-dev-base.git

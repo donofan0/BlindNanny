@@ -1,0 +1,55 @@
+// Example devcontainer.json for a blank project using claude-dev-base.
+// Copy to .devcontainer/devcontainer.json in your repo and rename "name".
+{
+  "name": "BlindNanny",
+
+  // ── The three lines that wire the base in ─────────────────────────────────
+  // 1. Build the shared base to a local image tag on the HOST, before this
+  //    project's image. This is what removes the need for a registry:
+  //    the Dockerfile's `FROM claude-dev-base:local` resolves locally.
+  //    ~1-2s no-op once the base layers are cached.
+  "initializeCommand": "docker build -t claude-dev-base:local .devcontainer/claude-dev-base",
+
+  // 2. Your project image (starts FROM claude-dev-base:local).
+  "build": { "dockerfile": "Dockerfile" },
+
+  // 3. One-time per-volume activation of the Claude helper tools (rtk hook,
+  //    graphify skill, caveman plugin) into the persisted ~/.claude volume.
+  //    Every step is best-effort, so container creation never fails offline.
+  "postCreateCommand": "bash /workspace/.devcontainer/claude-dev-base/setup-claude-tools.sh",
+
+  "remoteUser": "node",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+
+  // Persisted volumes: Claude config/history survive image rebuilds, so the
+  // postCreateCommand activation above only has to succeed once.
+  "mounts": [
+    "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+    "source=jupyter-config-${devcontainerId},target=/home/node/.jupyter,type=volume",
+    "source=cache-huggingface-${devcontainerId},target=/home/node/.cache,type=volume"
+  ],
+
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["anthropic.claude-code"],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  }
+
+  // ── Optional: enable the base's default-DROP egress firewall ──────────────
+  // Needs NET_ADMIN/NET_RAW. Add domains from your Dockerfile by writing them
+  // to /etc/firewall-extra-domains (see examples/Dockerfile).
+  // "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW"],
+  // "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  // "waitFor": "postStartCommand"
+}

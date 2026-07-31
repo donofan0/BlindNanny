@@ -9,4 +9,13 @@
 #define MQTT_SERVER "SERVER"
 #define MQTT_PORT 1883
 #define MQTT_USER "USERNAME"
-#define MQTT_PASSWORD "PASSWORD" 
+#define MQTT_PASSWORD "PASSWORD"
+
+// Local web UI credentials (HTTP Basic auth). Change these!
+#define WEB_USER "admin"
+#define WEB_PASS "blindnanny"
+
+// Uncomment to talk to the MQTT broker over TLS. Also set MQTT_PORT to 8883
+// above. Uses an unverified connection by default (setInsecure); provide a CA
+// certificate in mqttSetup() if you need full server verification.
+// #define USE_MQTT_TLS

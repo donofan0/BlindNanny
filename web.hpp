@@ -3,10 +3,14 @@
 #include <html.hpp>
 #include <solar.hpp>
 
+// Reject the request with a 401 unless it carries valid HTTP Basic auth.
+#define REQUIRE_AUTH(req) do { if(!(req)->authenticate(WEB_USER, WEB_PASS)) return (req)->requestAuthentication(); } while(0)
+
 void webServerSetup() {
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", index_html); });
-    
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ REQUIRE_AUTH(request); request->send_P(200, "text/html", index_html); });
+
     server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request){
+        REQUIRE_AUTH(request);
         cfg_auto_mode = false; preferences.putBool("auto", false);
         int pct = request->hasParam("pos") ? request->getParam("pos")->value().toInt() : 0;
         // m = 0 both (default), 1 left only, 2 right only
@@ -15,13 +19,15 @@ void webServerSetup() {
         request->send(200, "text/plain", "OK");
     });
     
-    server.on("/home", HTTP_GET, [](AsyncWebServerRequest *request){ 
-        homeRequested = true; 
+    server.on("/home", HTTP_GET, [](AsyncWebServerRequest *request){
+        REQUIRE_AUTH(request);
+        homeRequested = true;
         Serial.println("Homeing requested");
         request->send(200, "text/plain", "Homing"); 
     });
     
     server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
+        REQUIRE_AUTH(request);
         int p1 = map(stepper1.currentPosition(), -getMaxPosition(1), 0, 0, 100);
         int p2 = map(stepper2.currentPosition(), -getMaxPosition(2), 0, 0, 100);
         String j = "{\"pos\":" + String(p1) +
@@ -32,6 +38,7 @@ void webServerSetup() {
     });
     
     server.on("/diag", HTTP_GET, [](AsyncWebServerRequest *request){
+        REQUIRE_AUTH(request);
         float az, el;
         int targ = calculateSunPosition(az, el);
         String j = "{";
@@ -50,6 +57,7 @@ void webServerSetup() {
     });
     
     server.on("/save_cfg", HTTP_GET, [](AsyncWebServerRequest *request){
+        REQUIRE_AUTH(request);
         int oldCnt = cfg_motor_count;  // a change to motor count needs a reboot to (de)init driver 2
         if(request->hasParam("lat")) cfg_lat = request->getParam("lat")->value().toFloat();
         if(request->hasParam("lon")) cfg_lon = request->getParam("lon")->value().toFloat();
@@ -112,7 +120,8 @@ void webServerSetup() {
     });
     
     server.on("/get_cfg", HTTP_GET, [](AsyncWebServerRequest *request){
-        String j = "{"; 
+        REQUIRE_AUTH(request);
+        String j = "{";
         j += "\"lat\":" + String(cfg_lat, 4) + ","; 
         j += "\"lon\":" + String(cfg_lon, 4) + ","; 
         j += "\"az\":" + String(cfg_win_az) + ",";

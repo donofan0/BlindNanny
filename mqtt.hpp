@@ -205,6 +205,11 @@ void mqttSetup() {
     availTopic = baseTopic + "/availability";
     Serial.println("mqtt device ID is " + deviceId);
 
+#ifdef USE_MQTT_TLS
+    // Accept the broker without CA verification. For full verification call
+    // espClient.setCACert(...) with your broker's CA instead.
+    espClient.setInsecure();
+#endif
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(callback);
     client.setBufferSize(1024);

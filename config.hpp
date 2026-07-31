@@ -88,7 +88,12 @@ AccelStepper stepper1(AccelStepper::DRIVER, STEP1_PIN, DIR1_PIN);
 AccelStepper stepper2(AccelStepper::DRIVER, STEP2_PIN, DIR2_PIN);
 
 AsyncWebServer server(80);
-WiFiClient espClient;
+#ifdef USE_MQTT_TLS
+  #include <WiFiClientSecure.h>
+  WiFiClientSecure espClient;
+#else
+  WiFiClient espClient;
+#endif
 PubSubClient client(espClient);
 Preferences preferences;
 

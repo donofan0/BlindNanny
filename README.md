@@ -6,27 +6,33 @@ and can auto-track the sun to block glare.
 
 ## Features
 
-- Local web UI with a live, draggable blind (two independent blinds when a
-  second motor is fitted).
-- Home Assistant MQTT auto-discovery: cover, calibrate button, IP sensor,
-  percent-closed number, auto-mode switch, plus per-side Left/Right covers.
-- Automatic sun-blocking that tracks the sun's real position (DST-proof).
-- Auto-homing against a hard stop using TMC2209 StallGuard.
+- Local web UI (HTTP Basic auth) with a live, draggable blind - two
+  independent blinds when a second motor is fitted.
+- Home Assistant MQTT auto-discovery with availability, per-side Left/Right
+  covers, calibrate button, IP sensor and auto-mode switch.
+- Automatic sun-blocking that tracks the sun's real position (DST-proof),
+  driving both blinds.
+- Auto-homing against a hard stop using TMC2209 StallGuard, with per-motor
+  direction invert for mirrored/reversed installs.
+- Positions persisted to flash (no slow re-home on every boot), WiFi
+  auto-reconnect, and OTA firmware updates.
 
 ## Home Assistant
 
-Set your MQTT broker in `login.hpp` (copy `login.hpp.example`). On boot the
-device announces itself via MQTT discovery, so it appears automatically under
-**Settings → Devices** as a single "BlindNanny" device with:
+Set your MQTT broker and web/OTA credentials in `login.hpp` (copy
+`login.hpp.example`). On boot the device announces itself via MQTT discovery,
+so it appears automatically under **Settings → Devices** as a single
+"BlindNanny" device with:
 
-- **Cover** – open / close / stop / set position (drives both blinds together).
-- **Left Blind / Right Blind** covers – only when *Motor Count* is 2; each
-  drives one blind independently.
-- **Percent Closed** number, **Auto Sun-Block** switch, **Calibrate** button,
-  **IP Address** sensor.
+- **Single motor:** one **Cover** – open / close / stop / set position.
+- **Two motors:** **Left Blind** and **Right Blind** covers, each driving one
+  blind independently (no combined cover – group them in HA if you want a
+  single control).
+- **Auto Sun-Block** switch, **Calibrate** button, **IP Address** sensor.
 
 The device publishes an MQTT availability (Last-Will) topic, so Home Assistant
-shows it **offline** if it drops off the network.
+shows it **offline** if it drops off the network. Optional MQTT-over-TLS is
+available via the `USE_MQTT_TLS` flag in `login.hpp` (set the port to 8883).
 
 MQTT topics live under `home/blinds/blind_<id>/`:
 
@@ -45,6 +51,16 @@ The sun position is computed from UTC using the NOAA solar-position algorithm
 (true solar time from longitude + equation of time). It does **not** rely on
 the configured timezone/GMT offset, so daylight-saving no longer throws the
 tracking off in summer. Only latitude and longitude need to be set.
+
+## Access & updates
+
+The web UI is reachable at `http://blindnanny-<id>.local` (mDNS) or by IP, and
+requires the `WEB_USER` / `WEB_PASS` credentials from `login.hpp`.
+
+Firmware can be updated over the air (no USB): push a build with the Arduino
+IDE / arduino-cli / PlatformIO `espota` uploader to the device's network port.
+Set `OTA_PASSWORD` in `login.hpp` to protect it. Don't push an update while a
+calibrate (homing) is running.
 
 ## Building
 

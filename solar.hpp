@@ -1,28 +1,50 @@
 #pragma once
 
 // --- SUN TRACKING ---
-// Helper to just get current sun position and target without side effects
+// Helper to just get current sun position and target without side effects.
+//
+// Uses the NOAA solar-position algorithm computed off UTC. Working in UTC and
+// deriving true solar time from longitude + the equation of time means the
+// result is independent of the configured timezone AND of daylight saving.
+// The old code read the local wall clock (configTime + fixed cfg_gmt_offset,
+// which has no DST), so every summer the sun angle was ~1 hour out and tracking
+// drifted badly toward sunset. This version needs only cfg_lat / cfg_lon.
 int calculateSunPosition(float &azOut, float &elOut) {
     time_t now;
-    time(&now); struct tm * t = localtime(&now);
-    int dayOfYear = t->tm_yday;
-    float hour = t->tm_hour + (t->tm_min / 60.0);
-    
-    // Complex astronomical formula logic
-    float declination = 23.45 * sin(TWO_PI * (284 + dayOfYear) / 365.0) * DEG_TO_RAD;
-    float hourAngle = (hour - 12.0) * 15.0 * DEG_TO_RAD;
+    time(&now);
+    struct tm tUtc;
+    gmtime_r(&now, &tUtc);                 // UTC, not local -> DST-proof
+    int dayOfYear = tUtc.tm_yday;          // 0 = Jan 1
+    float utcHour = tUtc.tm_hour + (tUtc.tm_min / 60.0) + (tUtc.tm_sec / 3600.0);
+
+    // Fractional year (radians)
+    float gamma = (TWO_PI / 365.0) * (dayOfYear + (utcHour - 12.0) / 24.0);
+
+    // Equation of time (minutes) and solar declination (radians) - NOAA/Spencer
+    float eqTime = 229.18 * (0.000075 + 0.001868 * cos(gamma) - 0.032077 * sin(gamma)
+                   - 0.014615 * cos(2 * gamma) - 0.040849 * sin(2 * gamma));
+    float declination = 0.006918 - 0.399912 * cos(gamma) + 0.070257 * sin(gamma)
+                        - 0.006758 * cos(2 * gamma) + 0.000907 * sin(2 * gamma)
+                        - 0.002697 * cos(3 * gamma) + 0.00148 * sin(3 * gamma);
+
+    // True solar time (minutes). Longitude east positive; timezone term is 0
+    // because utcHour is already UTC.
+    float trueSolarTime = utcHour * 60.0 + eqTime + 4.0 * cfg_lon;
+    float hourAngleDeg = (trueSolarTime / 4.0) - 180.0;   // -180..+180, 0 at solar noon
+    float hourAngle = hourAngleDeg * DEG_TO_RAD;
+
     float latRad = cfg_lat * DEG_TO_RAD;
     float sinEl = sin(latRad) * sin(declination) + cos(latRad) * cos(declination) * cos(hourAngle);
     float elRad = asin(sinEl);
     float elDeg = elRad * RAD_TO_DEG;
     float cosAz = (sin(declination) - sinEl * sin(latRad)) / (cos(elRad) * cos(latRad));
-    
+
     if(cosAz > 1.0) cosAz = 1.0;
     if(cosAz < -1.0) cosAz = -1.0;
-    
+
     float azRad = acos(cosAz);
-    float azDeg = azRad * RAD_TO_DEG;
-    if (hour > 12) azDeg = 360.0 - azDeg;
+    float azDeg = azRad * RAD_TO_DEG;         // measured from North (0=N, 180=S)
+    if (hourAngleDeg > 0) azDeg = 360.0 - azDeg;  // afternoon -> sun in the west
 
     azOut = azDeg;
     elOut = elDeg;

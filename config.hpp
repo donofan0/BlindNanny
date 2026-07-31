@@ -2,7 +2,8 @@
 
 // Base Topics
 String deviceId;
-String baseTopic; 
+String baseTopic;
+String hostName;   // mDNS / OTA hostname, e.g. blindnanny-ab12
 
 // #define ESP32C6 // Uncomment if using a ESP32C6 otherwise leave it commented out for a ESP32 Wroom
 #ifdef ESP32C6

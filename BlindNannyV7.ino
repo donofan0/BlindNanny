@@ -14,6 +14,7 @@
 #include <blinds.hpp>
 #include <mqtt.hpp>
 #include <web.hpp>
+#include <ota.hpp>
 
 void setup() {
     Serial.begin(115200);
@@ -26,10 +27,12 @@ void setup() {
     blindSetup();
     mqttSetup();
     webServerSetup();
+    otaSetup();
 }
 
 void loop() {
     wifiLoop();
+    otaLoop();
     mqttLoop();
     blindLoop();
     solarLoop();

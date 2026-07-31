@@ -8,6 +8,15 @@
 void wifiSetup(unsigned long timeoutMs = 15000) {
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
+
+    // Unique, stable hostname from the MAC so multiple units don't collide on
+    // the network (used for DHCP hostname, mDNS and OTA).
+    String mac = WiFi.macAddress();
+    mac.replace(":", "");
+    hostName = "blindnanny-" + mac.substring(8);
+    hostName.toLowerCase();
+    WiFi.setHostname(hostName.c_str());
+
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     unsigned long start = millis();

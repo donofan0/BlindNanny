@@ -15,6 +15,9 @@
 #define WEB_USER "admin"
 #define WEB_PASS "blindnanny"
 
+// Optional password to protect over-the-air (OTA) firmware updates.
+// #define OTA_PASSWORD "changeme"
+
 // Uncomment to talk to the MQTT broker over TLS. Also set MQTT_PORT to 8883
 // above. Uses an unverified connection by default (setInsecure); provide a CA
 // certificate in mqttSetup() if you need full server verification.

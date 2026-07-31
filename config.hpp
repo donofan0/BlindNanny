@@ -45,18 +45,18 @@ String baseTopic;
 
 // --- MOTOR SETTINGS ---
 #define R_SENSE      0.11f 
-#define ACCELERATION  1000    
+#define ACCELERATION  500    
 
 // --- PHYSICAL DIMENSIONS & CONFIG ---
-#define HOMEING_TIMEOUT_SECS 240
+#define HOMEING_TIMEOUT_SECS 160
 
 // --- CONFIG VARIABLES (Saved to Preferences) ---
 float cfg_lat = 42.4414;
 float cfg_lon = -70.9692;
 int   cfg_win_az = 230;    
 float cfg_win_top = 2.02;
-float cfg_user_dist = 1.14;
-float cfg_eye_h = 1.4;
+float cfg_user_dist = 1.0;
+float cfg_eye_h = 1.0;
 float cfg_gmt_offset = -5;
 bool  cfg_auto_mode = false;
 
@@ -70,8 +70,8 @@ int   cfg_motor_count = 2;
 int   cfg_speed = 4600;
 int   cfg_m1_current = 1000;
 int   cfg_m2_current = 800;
-int   cfg_m1_stall = 1;
-int   cfg_m2_stall = 1;
+int   cfg_m1_stall = 50;
+int   cfg_m2_stall = 50;
 
 // --- GLOBALS ---
 TMC2209Stepper driver1(&TMC_SERIAL_PORT, R_SENSE, 0b00);

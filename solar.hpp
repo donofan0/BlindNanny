@@ -57,7 +57,7 @@ void updateSunTracking() {
     long steps = pctToSteps(targetPct);
     long maxPos = getMaxPosition(1);
     
-    if (abs(steps - stepper1.currentPosition()) > (maxPos/50)) {
+    if (abs(steps + stepper1.currentPosition()) > (maxPos/50)) {
          moveTarget = steps;
          moveRequested = true;
     }
@@ -66,7 +66,6 @@ void updateSunTracking() {
 void solarLoop()
 {
   static unsigned long lastSunCheck = 0;
-
   if (cfg_auto_mode && !motorsEnabled && (millis() - lastSunCheck > 10000)) {
       updateSunTracking();
       lastSunCheck = millis();

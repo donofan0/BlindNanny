@@ -28,7 +28,8 @@
     "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
     "source=jupyter-config-${devcontainerId},target=/home/node/.jupyter,type=volume",
-    "source=cache-huggingface-${devcontainerId},target=/home/node/.cache,type=volume"
+    "source=cache-huggingface-${devcontainerId},target=/home/node/.cache,type=volume",
+    "source=${localWorkspaceFolder}/login.hpp.example,target=/workspace/login.hpp,type=bind"
   ],
 
   "containerEnv": {

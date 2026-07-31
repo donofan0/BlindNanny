@@ -91,8 +91,8 @@ const char index_html[] PROGMEM = R"rawliteral(
                     <div class="input-group"><label>M2 Current (mA)</label><input type="number" id="inp_m2_curr"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="input-group"><label>M1 Stall (0-255)</label><input type="number" id="inp_m1_stall"></div>
-                    <div class="input-group"><label>M2 Stall (0-255)</label><input type="number" id="inp_m2_stall"></div>
+                    <div class="input-group"><label>M1 Sensitivity (least/0 - most/255)</label><input type="number" id="inp_m1_stall"></div>
+                    <div class="input-group"><label>M2 Sensitivity (least/0 - most/255)</label><input type="number" id="inp_m2_stall"></div>
                 </div>
             </div>
 

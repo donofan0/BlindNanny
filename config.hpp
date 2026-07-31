@@ -87,7 +87,9 @@ Preferences preferences;
 
 bool homeRequested = false;
 bool moveRequested = false;
-long moveTarget = 0; // Target in steps (always based on M1's scale)
+long moveTarget = 0;  // Blind 1 (Left) target in steps, in M1's scale
+bool moveRequested2 = false;
+long moveTarget2 = 0; // Blind 2 (Right) target in steps, in M2's scale
 bool motorsEnabled = false;
 
 void configSetup()

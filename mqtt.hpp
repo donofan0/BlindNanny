@@ -63,6 +63,27 @@ void publishDiscovery() {
         "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
         "\"icon\":\"mdi:sun-clock\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/switch/" + deviceId + "_auto/config").c_str(), plAuto.c_str(), true);
+
+    // 6+7. Per-blind covers (only when a second motor is fitted) so the left
+    // and right blinds can be driven individually from Home Assistant.
+    if (cfg_motor_count > 1) {
+        const char* sides[2]  = {"left", "right"};
+        const char* names[2]  = {"Left Blind", "Right Blind"};
+        for (int i = 0; i < 2; i++) {
+            String side = sides[i];
+            String pSide = "{\"name\":\"" + String(names[i]) + "\","
+                "\"unique_id\":\"" + deviceId + "_" + side + "\","
+                "\"cmd_t\":\"" + baseTopic + "/" + side + "/command\","
+                "\"pos_t\":\"" + baseTopic + "/" + side + "/position\","
+                "\"set_pos_t\":\"" + baseTopic + "/" + side + "/set_position\","
+                "\"stat_t\":\"" + baseTopic + "/" + side + "/state\","
+                "\"pl_open\":\"OPEN\",\"pl_cls\":\"CLOSE\",\"pl_stop\":\"STOP\","
+                "\"pos_open\":100,\"pos_clsd\":0,\"dev_cla\":\"blind\","
+                + availBlock() + "," + devBlock() + "}";
+            client.publish(("homeassistant/cover/" + deviceId + "_" + side + "/config").c_str(),
+                           pSide.c_str(), true);
+        }
+    }
 }
 
 // Publish MQTT State
@@ -85,6 +106,23 @@ void publishState() {
     else if(pct >= 99) state = "closed";
     else if(pct <= 1) state = "open";
     client.publish((baseTopic + "/state").c_str(), state.c_str());
+
+    // Per-blind position/state (left = motor 1, right = motor 2)
+    if (cfg_motor_count > 1) {
+        AccelStepper* steppers[2] = {&stepper1, &stepper2};
+        const char* sides[2] = {"left", "right"};
+        for (int i = 0; i < 2; i++) {
+            long mp = getMaxPosition(i + 1);
+            int sp = constrain((int)map(steppers[i]->currentPosition(), -mp, 0, 0, 100), 0, 100);
+            client.publish((baseTopic + "/" + sides[i] + "/position").c_str(),
+                           String(100 - sp).c_str());
+            String ss = "stopped";
+            if(steppers[i]->isRunning()) ss = (steppers[i]->distanceToGo() > 0) ? "closing" : "opening";
+            else if(sp >= 99) ss = "closed";
+            else if(sp <= 1) ss = "open";
+            client.publish((baseTopic + "/" + sides[i] + "/state").c_str(), ss.c_str());
+        }
+    }
 }
 
 // reconnect to mqtt
@@ -100,6 +138,11 @@ void reconnect() {
             client.subscribe((baseTopic + "/set_pct_closed").c_str());
             client.subscribe((baseTopic + "/set_auto").c_str());
             client.subscribe((baseTopic + "/calibrate").c_str());
+            // Per-blind (left / right) control topics
+            client.subscribe((baseTopic + "/left/command").c_str());
+            client.subscribe((baseTopic + "/left/set_position").c_str());
+            client.subscribe((baseTopic + "/right/command").c_str());
+            client.subscribe((baseTopic + "/right/set_position").c_str());
             publishDiscovery(); 
             publishState();
             client.publish((baseTopic + "/auto_state").c_str(), cfg_auto_mode ? "ON" : "OFF");
@@ -130,30 +173,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
         client.publish((baseTopic + "/auto_state").c_str(), "OFF");
     }
 
+    // Which blind does this command target? Left/right sub-topics drive a
+    // single motor; the base topics drive both together.
+    int which = 0;
+    if (t.indexOf("/left/") >= 0) which = 1;
+    else if (t.indexOf("/right/") >= 0) which = 2;
+
     if (t.endsWith("/command")) {
         Serial.println("Recieved MQTT message: " + message);
-        if (message == "OPEN") { moveTarget = getMaxPosition(1); moveRequested = true; }
-        else if (message == "CLOSE") { moveTarget = 0; moveRequested = true; }
-        else if (message == "STOP") { 
-            // Freeze motor 1 immediately where it is
-            stepper1.stop();
-            moveRequested = false;
-            moveTarget = -stepper1.currentPosition();
-            // Freeze motor 2 immediately where it is
-            if (cfg_motor_count > 1) 
-            {
-                stepper2.stop();
-            }
+        if (message == "OPEN") requestBlindMove(0, which);
+        else if (message == "CLOSE") requestBlindMove(100, which);
+        else if (message == "STOP") {
+            // Freeze the targeted motor(s) immediately where they are.
+            if (which != 2) { stepper1.stop(); moveRequested = false; }
+            if (which != 1 && cfg_motor_count > 1) { stepper2.stop(); moveRequested2 = false; }
             publishState();
-        } 
+        }
     } else if (t.endsWith("/set_position")) {
-        moveTarget = pctToSteps(100 - message.toInt());
-        moveRequested = true;
-    } 
-    else if (t.endsWith("/set_pct_closed")) 
-    {
-        moveTarget = pctToSteps(message.toInt());
-        moveRequested = true;
+        requestBlindMove(100 - message.toInt(), which);
+    }
+    else if (t.endsWith("/set_pct_closed")) {
+        requestBlindMove(message.toInt(), which);
     }
 }
 

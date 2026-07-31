@@ -17,8 +17,27 @@ long getMaxPosition(int motorId) {
     return max;
 }
 
+// pctToStepsMotor maps a percent-closed value into a given motor's own step
+// space (each motor can have a different configured height).
+long pctToStepsMotor(int pct, int motorId) { return map(pct, 100, 0, 0, getMaxPosition(motorId)); }
+
 // pctToSteps maps to Motor 1 space (the primary reference)
-long pctToSteps(int pct) { return map(pct, 100, 0, 0, getMaxPosition(1)); }
+long pctToSteps(int pct) { return pctToStepsMotor(pct, 1); }
+
+// Request a move by percent-closed (0 = open, 100 = closed).
+//   which = 0 -> both blinds, 1 -> left (motor 1) only, 2 -> right (motor 2) only
+// Each motor is targeted in its own scale so mismatched heights stay aligned.
+void requestBlindMove(int pctClosed, int which) {
+  pctClosed = constrain(pctClosed, 0, 100);
+  if (which != 2) {
+    moveTarget = pctToStepsMotor(pctClosed, 1);
+    moveRequested = true;
+  }
+  if (which != 1 && cfg_motor_count > 1) {
+    moveTarget2 = pctToStepsMotor(pctClosed, 2);
+    moveRequested2 = true;
+  }
+}
 
 // --- POWER MANAGEMENT ---
 // Enable or disable driver power to reduce heat
@@ -137,21 +156,19 @@ void blindLoop()
     homeRequested = false; 
   }
   
-  // Process new movement positions safely
-  if (moveRequested) { 
+  // Process new movement positions safely. Blind 1 (left) and blind 2 (right)
+  // are handled independently so they can be driven together or one at a time.
+  if (moveRequested) {
     moveRequested = false;
     enableMotors(true);
     stepper1.moveTo(-moveTarget);
     Serial.printf("Moving blind 1 to %ld\n", moveTarget);
-    if (cfg_motor_count > 1) {
-      // Because max bounds might be different, map M1's target steps 
-      // proportionally to M2's total steps based on independent sizing
-      long max1 = getMaxPosition(1);
-      long max2 = getMaxPosition(2);
-      long target2 = (max1 == 0) ? 0 : (moveTarget * ((float)max2 / max1));
-      stepper2.moveTo(-target2);
-      Serial.printf("Moving blind 2 to %ld since multiple is %ld/%ld\n", target2, max2, max1);
-    }
+  }
+  if (moveRequested2 && cfg_motor_count > 1) {
+    moveRequested2 = false;
+    enableMotors(true);
+    stepper2.moveTo(-moveTarget2);
+    Serial.printf("Moving blind 2 to %ld\n", moveTarget2);
   }
 
   stepper1.run();

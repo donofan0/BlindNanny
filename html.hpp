@@ -19,6 +19,11 @@ const char index_html[] PROGMEM = R"rawliteral(
         .handle { position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%); width: 50px; height: 50px; background: #fff; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; cursor: grab; z-index: 50; color: #3b82f6; touch-action: none; }
         .handle:active { cursor: grabbing; background: #eff6ff; }
         .cord { position: absolute; bottom: 0; left: 50%; width: 2px; height: 25px; background: white; transform: translateX(-50%); }
+        .blind-col { position: absolute; top: 0; height: 100%; z-index: 10; touch-action: none; }
+        .blind-col.single { left: 0; width: 100%; }
+        .blind-col.left  { left: 0;  width: 50%; }
+        .blind-col.right { right: 0; width: 50%; border-left: 2px solid #33415580; }
+        .side-label { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.65); z-index: 60; pointer-events: none; }
         .btn { background: #1e293b; border: 1px solid #334155; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #94a3b8; transition: all 0.2s; }
         .btn:active { transform: scale(0.95); background: #334155; color: white; }
         #settings-modal, #diag-modal { transition: opacity 0.3s ease; }
@@ -45,7 +50,14 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <div class="window-frame" id="window">
         <div class="window-bg"><i class="fa-solid fa-cloud text-white/40 text-4xl absolute top-10 left-10"></i><i class="fa-solid fa-sun text-yellow-400/80 text-6xl absolute top-6 right-6"></i></div>
-        <div class="blind-container" id="blind"><div class="slats"></div><div class="cord"></div><div class="handle" id="handle"><i class="fa-solid fa-grip-lines text-xl"></i></div></div>
+        <div class="blind-col single" id="col1">
+            <div class="blind-container" id="blind1"><div class="slats"></div><div class="cord"></div><div class="handle" id="handle1" data-m="1"><i class="fa-solid fa-grip-lines text-xl"></i></div></div>
+            <div class="side-label hidden" id="lbl1">L</div>
+        </div>
+        <div class="blind-col right hidden" id="col2">
+            <div class="blind-container" id="blind2"><div class="slats"></div><div class="cord"></div><div class="handle" id="handle2" data-m="2"><i class="fa-solid fa-grip-lines text-xl"></i></div></div>
+            <div class="side-label" id="lbl2">R</div>
+        </div>
     </div>
     
     <div class="text-center">
@@ -166,16 +178,20 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     )rawliteral" R"rawliteral(
     <script>
-        const blind = document.getElementById('blind');
-        const handle = document.getElementById('handle');
         const windowFrame = document.getElementById('window');
         const display = document.getElementById('pct-display');
         const displayMeters = document.getElementById('meter-display');
         const connectionStatus = document.getElementById('status');
-        let MAX_METERS = 2.0; 
-        let isDragging = false;
-        let lastSent = 0;
+        let MAX_METERS = 2.0;
+        let motorCount = 1;
+        let dragMotor = 0;              // 1 or 2 while dragging that blind, else 0
         let diagInterval = null;
+        const lastSent = {1: 0, 2: 0};
+        const curPct   = {1: 0, 2: 0};
+        const blinds = {
+            1: { container: document.getElementById('blind1'), handle: document.getElementById('handle1'), col: document.getElementById('col1') },
+            2: { container: document.getElementById('blind2'), handle: document.getElementById('handle2'), col: document.getElementById('col2') }
+        };
 
         function toggleSettings() {
             const m = document.getElementById('settings-modal');
@@ -275,57 +291,80 @@ const char index_html[] PROGMEM = R"rawliteral(
             });
         }
 
-        function startDrag(e) { isDragging = true; connectionStatus.innerText = "Dragging..."; if(e.cancelable) e.preventDefault(); }
-        function endDrag() { if(isDragging) { isDragging = false; sendPosition(); } }
+        // Show one full-width blind, or two half-width blinds when a second
+        // motor is configured.
+        function applyMotorCount() {
+            const c1 = blinds[1].col, c2 = blinds[2].col;
+            if (motorCount > 1) {
+                c1.classList.remove('single'); c1.classList.add('left');
+                c2.classList.remove('hidden');
+                document.getElementById('lbl1').classList.remove('hidden');
+            } else {
+                c1.classList.add('single'); c1.classList.remove('left');
+                c2.classList.add('hidden');
+                document.getElementById('lbl1').classList.add('hidden');
+            }
+        }
+        function setBlindHeight(pct, m) { curPct[m] = pct; blinds[m].container.style.height = pct + '%'; }
+        function setDisplay(pct) {
+            display.innerText = pct + '%';
+            displayMeters.innerText = ((pct / 100.0) * MAX_METERS).toFixed(2) + 'm';
+        }
+        function startDrag(e) {
+            dragMotor = parseInt(e.currentTarget.dataset.m);
+            connectionStatus.innerText = "Dragging " + (dragMotor === 2 ? "Right" : "Left") + "...";
+            if (e.cancelable) e.preventDefault();
+        }
+        function endDrag() {
+            if (dragMotor) { const m = dragMotor; dragMotor = 0; sendPosition(curPct[m], m); }
+        }
         function drag(e) {
-            if (!isDragging) return;
-            e.preventDefault(); 
-            const rect = windowFrame.getBoundingClientRect();
+            if (!dragMotor) return;
+            e.preventDefault();
+            const rect = blinds[dragMotor].col.getBoundingClientRect();
             let clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
             let y = clientY - rect.top;
             if (y < 0) y = 0; if (y > rect.height) y = rect.height;
-            const percentage = Math.round((y / rect.height) * 100);
-            updateVisuals(percentage);
-            if (Math.abs(percentage - lastSent) > 5) { sendPosition(percentage); }
+            const pct = Math.round((y / rect.height) * 100);
+            setBlindHeight(pct, dragMotor);
+            setDisplay(pct);
+            if (Math.abs(pct - lastSent[dragMotor]) > 5) { sendPosition(pct, dragMotor); }
         }
-        function updateVisuals(pct) {
-            blind.style.height = pct + '%';
-            display.innerText = pct + '%';
-            let m = (pct / 100.0) * MAX_METERS;
-            displayMeters.innerText = m.toFixed(2) + 'm';
-        }
-        function sendPosition(pctOverride) {
-            const val = pctOverride !== undefined ? pctOverride : parseInt(display.innerText);
-            lastSent = val;
-            updateVisuals(val); 
-            connectionStatus.innerText = "Moving to " + val + "%...";
-            fetch('/set?pos=' + val).then(r => r.text()).then(() => connectionStatus.innerText = "Done").catch(() => connectionStatus.innerText = "Error");
+        // m: 0 = both blinds, 1 = left only, 2 = right only
+        function sendPosition(pct, m) {
+            m = (m === undefined) ? 0 : m;
+            if (m === 0) { setBlindHeight(pct, 1); setBlindHeight(pct, 2); lastSent[1] = pct; lastSent[2] = pct; }
+            else { lastSent[m] = pct; }
+            setDisplay(pct);
+            connectionStatus.innerText = "Moving to " + pct + "%...";
+            fetch('/set?pos=' + pct + '&m=' + m).then(r => r.text()).then(() => connectionStatus.innerText = "Done").catch(() => connectionStatus.innerText = "Error");
         }
         function triggerHome() {
             connectionStatus.innerText = "Homing...";
-            fetch('/home').then(r => r.text()).then(() => {
-                connectionStatus.innerText = "Calibrating...";
-                setTimeout(() => { updateVisuals(0); }, 3000);
-            });
+            fetch('/home').then(r => r.text()).then(() => { connectionStatus.innerText = "Calibrating..."; });
         }
-        
-        handle.addEventListener('mousedown', startDrag);
-        handle.addEventListener('touchstart', startDrag, {passive: false});
+
+        blinds[1].handle.addEventListener('mousedown', startDrag);
+        blinds[1].handle.addEventListener('touchstart', startDrag, {passive: false});
+        blinds[2].handle.addEventListener('mousedown', startDrag);
+        blinds[2].handle.addEventListener('touchstart', startDrag, {passive: false});
         document.addEventListener('mousemove', drag);
         document.addEventListener('touchmove', drag, {passive: false});
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
-        
-        fetch('/get_cfg').then(r => r.json()).then(d => { MAX_METERS = d.m1_max; });
+
+        fetch('/get_cfg').then(r => r.json()).then(d => { MAX_METERS = d.m1_max; motorCount = d.cnt; applyMotorCount(); });
         setInterval(() => {
-            if (!isDragging) {
-                fetch('/status').then(r => r.json()).then(data => {
-                    if(Math.abs(data.pos - parseInt(display.innerText)) > 2) { updateVisuals(data.pos); }
-                    if(data.auto) document.getElementById('auto-badge').classList.remove('hidden');
-                    else document.getElementById('auto-badge').classList.add('hidden');
-                    if(connectionStatus.innerText === "Connecting...") connectionStatus.innerText = "Ready";
-                }).catch(e => {});
-            }
+            if (dragMotor) return;
+            fetch('/status').then(r => r.json()).then(data => {
+                if (data.cnt !== motorCount) { motorCount = data.cnt; applyMotorCount(); }
+                if (Math.abs(data.pos - curPct[1]) > 2) setBlindHeight(data.pos, 1);
+                if (motorCount > 1 && Math.abs(data.pos2 - curPct[2]) > 2) setBlindHeight(data.pos2, 2);
+                setDisplay(data.pos);
+                if (data.auto) document.getElementById('auto-badge').classList.remove('hidden');
+                else document.getElementById('auto-badge').classList.add('hidden');
+                if (connectionStatus.innerText === "Connecting...") connectionStatus.innerText = "Ready";
+            }).catch(e => {});
         }, 3000);
     </script>
 </body>

@@ -9,7 +9,9 @@ void webServerSetup() {
     server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request){
         cfg_auto_mode = false; preferences.putBool("auto", false);
         int pct = request->hasParam("pos") ? request->getParam("pos")->value().toInt() : 0;
-        moveTarget = pctToSteps(pct); moveRequested = true;
+        // m = 0 both (default), 1 left only, 2 right only
+        int which = request->hasParam("m") ? request->getParam("m")->value().toInt() : 0;
+        requestBlindMove(pct, which);
         request->send(200, "text/plain", "OK");
     });
     
@@ -20,9 +22,12 @@ void webServerSetup() {
     });
     
     server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
-        long maxPos = getMaxPosition(1);
-        int p = map(stepper1.currentPosition(), -maxPos, 0, 0, 100);
-        String j = "{\"pos\":" + String(p) + ", \"auto\":" + (cfg_auto_mode?"1":"0") + "}";
+        int p1 = map(stepper1.currentPosition(), -getMaxPosition(1), 0, 0, 100);
+        int p2 = map(stepper2.currentPosition(), -getMaxPosition(2), 0, 0, 100);
+        String j = "{\"pos\":" + String(p1) +
+                   ", \"pos2\":" + String(p2) +
+                   ", \"cnt\":" + String(cfg_motor_count) +
+                   ", \"auto\":" + (cfg_auto_mode?"1":"0") + "}";
         request->send(200, "application/json", j);
     });
     

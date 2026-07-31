@@ -20,42 +20,24 @@ String availBlock() {
 
 // Announce device to Home Assistant for auto-discovery
 void publishDiscovery() {
-    // 1. Cover Entity (controls both blinds together)
-    String pl = "{\"name\":null,"
-        "\"unique_id\":\"" + deviceId + "\","
-        "\"cmd_t\":\"" + baseTopic + "/command\","
-        "\"pos_t\":\"" + baseTopic + "/position\","
-        "\"set_pos_t\":\"" + baseTopic + "/set_position\","
-        "\"stat_t\":\"" + baseTopic + "/state\","
-        "\"pl_open\":\"OPEN\",\"pl_cls\":\"CLOSE\",\"pl_stop\":\"STOP\","
-        "\"pos_open\":100,\"pos_clsd\":0,"
-        "\"dev_cla\":\"blind\"," + availBlock() + "," + devBlock() + "}";
-    client.publish(("homeassistant/cover/" + deviceId + "/config").c_str(), pl.c_str(), true);
+    bool multi = cfg_motor_count > 1;
 
-    // 2. Calibrate Button
+    // --- Entities present in every mode ---
+    // Calibrate button
     String plCal = "{\"name\":\"Calibrate\","
         "\"unique_id\":\"" + deviceId + "_cal\","
         "\"cmd_t\":\"" + baseTopic + "/calibrate\","
         "\"icon\":\"mdi:arrow-collapse-down\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/button/" + deviceId + "_cal/config").c_str(), plCal.c_str(), true);
 
-    // 3. IP Address Sensor
+    // IP Address sensor
     String plIP = "{\"name\":\"IP Address\","
         "\"unique_id\":\"" + deviceId + "_ip\","
         "\"stat_t\":\"" + baseTopic + "/ip_address\","
         "\"icon\":\"mdi:ip-network\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/sensor/" + deviceId + "_ip/config").c_str(), plIP.c_str(), true);
 
-    // 4. Slider (percent closed)
-    String plSl = "{\"name\":\"Percent Closed\","
-        "\"unique_id\":\"" + deviceId + "_pct\","
-        "\"cmd_t\":\"" + baseTopic + "/set_pct_closed\","
-        "\"stat_t\":\"" + baseTopic + "/pct_closed\","
-        "\"min\":0,\"max\":100,\"unit_of_meas\":\"%\","
-        "\"icon\":\"mdi:blinds\"," + availBlock() + "," + devBlock() + "}";
-    client.publish(("homeassistant/number/" + deviceId + "_pct/config").c_str(), plSl.c_str(), true);
-
-    // 5. Auto Switch
+    // Auto sun-block switch
     String plAuto = "{\"name\":\"Auto Sun-Block\","
         "\"unique_id\":\"" + deviceId + "_auto\","
         "\"cmd_t\":\"" + baseTopic + "/set_auto\","
@@ -64,9 +46,26 @@ void publishDiscovery() {
         "\"icon\":\"mdi:sun-clock\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/switch/" + deviceId + "_auto/config").c_str(), plAuto.c_str(), true);
 
-    // 6+7. Per-blind covers (only when a second motor is fitted) so the left
-    // and right blinds can be driven individually from Home Assistant.
-    if (cfg_motor_count > 1) {
+    if (!multi) {
+        // Single blind: one combined cover. (No separate percent-closed number
+        // - it just duplicated the cover's own position control.)
+        String pl = "{\"name\":null,"
+            "\"unique_id\":\"" + deviceId + "\","
+            "\"cmd_t\":\"" + baseTopic + "/command\","
+            "\"pos_t\":\"" + baseTopic + "/position\","
+            "\"set_pos_t\":\"" + baseTopic + "/set_position\","
+            "\"stat_t\":\"" + baseTopic + "/state\","
+            "\"pl_open\":\"OPEN\",\"pl_cls\":\"CLOSE\",\"pl_stop\":\"STOP\","
+            "\"pos_open\":100,\"pos_clsd\":0,"
+            "\"dev_cla\":\"blind\"," + availBlock() + "," + devBlock() + "}";
+        client.publish(("homeassistant/cover/" + deviceId + "/config").c_str(), pl.c_str(), true);
+
+        // Remove any Left/Right covers left over from a previous 2-motor config.
+        client.publish(("homeassistant/cover/" + deviceId + "_left/config").c_str(), "", true);
+        client.publish(("homeassistant/cover/" + deviceId + "_right/config").c_str(), "", true);
+    } else {
+        // Two blinds: individual Left/Right covers, no misleading combined
+        // cover that only reflected motor 1.
         const char* sides[2]  = {"left", "right"};
         const char* names[2]  = {"Left Blind", "Right Blind"};
         for (int i = 0; i < 2; i++) {
@@ -83,45 +82,45 @@ void publishDiscovery() {
             client.publish(("homeassistant/cover/" + deviceId + "_" + side + "/config").c_str(),
                            pSide.c_str(), true);
         }
+        // Remove the combined cover / number left over from a 1-motor config.
+        client.publish(("homeassistant/cover/" + deviceId + "/config").c_str(), "", true);
+        client.publish(("homeassistant/number/" + deviceId + "_pct/config").c_str(), "", true);
     }
+}
+
+// Derive a cover state string ("opening"/"closing"/"open"/"closed"/"stopped")
+// from a stepper and its percent-closed value.
+String coverState(AccelStepper &s, int pct) {
+    if (s.isRunning()) return (s.distanceToGo() > 0) ? "closing" : "opening";
+    if (pct >= 99) return "closed";
+    if (pct <= 1)  return "open";
+    return "stopped";
 }
 
 // Publish MQTT State
 void publishState() {
     if (!client.connected()) return;
-    long pos = stepper1.currentPosition();
-    long maxPos = getMaxPosition(1);
-    // pos runs from -maxPos (fully open) to 0 (fully closed)
-    int pct = constrain((int)map(pos, -maxPos, 0, 0, 100), 0, 100);
 
-    client.publish((baseTopic + "/pct_closed").c_str(), String(pct).c_str());
-    client.publish((baseTopic + "/position").c_str(), String(100 - pct).c_str());
     client.publish((baseTopic + "/ip_address").c_str(), WiFi.localIP().toString().c_str());
 
-    // Report cover state off the percent-closed value. The old test used the
-    // raw (negative) position, so `pos <= 0` was always true and HA saw the
-    // cover permanently "open".
-    String state = "stopped";
-    if(stepper1.isRunning()) state = (stepper1.distanceToGo() > 0) ? "closing" : "opening";
-    else if(pct >= 99) state = "closed";
-    else if(pct <= 1) state = "open";
-    client.publish((baseTopic + "/state").c_str(), state.c_str());
-
-    // Per-blind position/state (left = motor 1, right = motor 2)
     if (cfg_motor_count > 1) {
+        // Two blinds: report each side; no combined/aggregate topic (it only
+        // ever reflected motor 1 and was misleading when the sides differed).
         AccelStepper* steppers[2] = {&stepper1, &stepper2};
         const char* sides[2] = {"left", "right"};
         for (int i = 0; i < 2; i++) {
             long mp = getMaxPosition(i + 1);
             int sp = constrain((int)map(steppers[i]->currentPosition(), -mp, 0, 0, 100), 0, 100);
-            client.publish((baseTopic + "/" + sides[i] + "/position").c_str(),
-                           String(100 - sp).c_str());
-            String ss = "stopped";
-            if(steppers[i]->isRunning()) ss = (steppers[i]->distanceToGo() > 0) ? "closing" : "opening";
-            else if(sp >= 99) ss = "closed";
-            else if(sp <= 1) ss = "open";
-            client.publish((baseTopic + "/" + sides[i] + "/state").c_str(), ss.c_str());
+            client.publish((baseTopic + "/" + sides[i] + "/position").c_str(), String(100 - sp).c_str());
+            client.publish((baseTopic + "/" + sides[i] + "/state").c_str(), coverState(*steppers[i], sp).c_str());
         }
+    } else {
+        // Single blind: the combined cover.
+        long maxPos = getMaxPosition(1);
+        // pos runs from -maxPos (fully open) to 0 (fully closed)
+        int pct = constrain((int)map(stepper1.currentPosition(), -maxPos, 0, 0, 100), 0, 100);
+        client.publish((baseTopic + "/position").c_str(), String(100 - pct).c_str());
+        client.publish((baseTopic + "/state").c_str(), coverState(stepper1, pct).c_str());
     }
 }
 

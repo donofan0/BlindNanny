@@ -122,10 +122,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <div class="input-group"><label>Win Top (m)</label><input type="number" id="inp_top" step="0.1"></div>
                 <div class="input-group"><label>Eye H (m)</label><input type="number" id="inp_eye" step="0.1"></div>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div class="input-group"><label>Dist (m)</label><input type="number" id="inp_dist" step="0.1"></div>
-                <div class="input-group"><label>UTC Off</label><input type="number" id="inp_gmt" step="0.5"></div>
-            </div>
+            <div class="input-group"><label>Dist (m)</label><input type="number" id="inp_dist" step="0.1"></div>
           
             <div class="flex items-center justify-between mt-4 p-3 bg-slate-700/50 rounded">
                 <span class="text-sm font-bold">Auto Sun-Block</span>
@@ -243,7 +240,6 @@ const char index_html[] PROGMEM = R"rawliteral(
                 document.getElementById('inp_top').value = d.top;
                 document.getElementById('inp_eye').value = d.eye;
                 document.getElementById('inp_dist').value = d.dist;
-                document.getElementById('inp_gmt').value = d.gmt;
                 document.getElementById('inp_auto').checked = d.auto;
                 
                 // Physical Setup
@@ -273,7 +269,6 @@ const char index_html[] PROGMEM = R"rawliteral(
                 top: document.getElementById('inp_top').value,
                 eye: document.getElementById('inp_eye').value,
                 dist: document.getElementById('inp_dist').value,
-                gmt: document.getElementById('inp_gmt').value,
                 auto: document.getElementById('inp_auto').checked ? 1 : 0,
                 
                 // Send new separate heights

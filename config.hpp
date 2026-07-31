@@ -58,7 +58,6 @@ int   cfg_win_az = 230;
 float cfg_win_top = 2.02;
 float cfg_user_dist = 1.0;
 float cfg_eye_h = 1.0;
-float cfg_gmt_offset = -5;
 bool  cfg_auto_mode = false;
 
 // Independent Motor Heights
@@ -114,7 +113,6 @@ void configSetup()
   cfg_win_top = preferences.getFloat("top", cfg_win_top);
   cfg_user_dist = preferences.getFloat("dist", cfg_user_dist);
   cfg_eye_h = preferences.getFloat("eye", cfg_eye_h);
-  cfg_gmt_offset = preferences.getFloat("gmt", cfg_gmt_offset);
   cfg_auto_mode = preferences.getBool("auto", cfg_auto_mode);
   cfg_steps_per_cm = preferences.getFloat("spcm", cfg_steps_per_cm);
   
@@ -132,5 +130,7 @@ void configSetup()
   cfg_m1_invert = preferences.getBool("m1_inv", cfg_m1_invert);
   cfg_m2_invert = preferences.getBool("m2_inv", cfg_m2_invert);
 
-  configTime(cfg_gmt_offset * 3600, 0, "pool.ntp.org");
+  // Sun tracking works entirely in UTC (see solar.hpp), so NTP is kept at UTC
+  // and no timezone/DST offset is needed.
+  configTime(0, 0, "pool.ntp.org");
 }

@@ -65,7 +65,6 @@ void webServerSetup() {
         if(request->hasParam("top")) cfg_win_top = request->getParam("top")->value().toFloat();
         if(request->hasParam("eye")) cfg_eye_h = request->getParam("eye")->value().toFloat();
         if(request->hasParam("dist")) cfg_user_dist = request->getParam("dist")->value().toFloat();
-        if(request->hasParam("gmt")) cfg_gmt_offset = request->getParam("gmt")->value().toFloat();
         if(request->hasParam("auto")) cfg_auto_mode = (request->getParam("auto")->value().toInt() == 1);
         
         // Grab independent sizes and configurations
@@ -85,7 +84,7 @@ void webServerSetup() {
         // Write to flash
         preferences.putFloat("lat", cfg_lat); preferences.putFloat("lon", cfg_lon); preferences.putInt("az", cfg_win_az);
         preferences.putFloat("top", cfg_win_top); preferences.putFloat("eye", cfg_eye_h); preferences.putFloat("dist", cfg_user_dist);
-        preferences.putFloat("gmt", cfg_gmt_offset); preferences.putBool("auto", cfg_auto_mode);
+        preferences.putBool("auto", cfg_auto_mode);
         
         preferences.putFloat("m1_max", cfg_m1_max_meters);
         preferences.putFloat("m2_max", cfg_m2_max_meters);
@@ -112,7 +111,6 @@ void webServerSetup() {
             driver2.SGTHRS(cfg_m2_stall);
         }
 
-        configTime(cfg_gmt_offset * 3600, 0, "pool.ntp.org");
         Serial.println("Saved new config");
         // Motor count changes driver 2 init, which only happens at boot.
         if (cfg_motor_count != oldCnt) rebootRequested = true;
@@ -128,7 +126,6 @@ void webServerSetup() {
         j += "\"top\":" + String(cfg_win_top, 2) + ","; 
         j += "\"eye\":" + String(cfg_eye_h, 2) + ","; 
         j += "\"dist\":" + String(cfg_user_dist, 2) + ",";
-        j += "\"gmt\":" + String(cfg_gmt_offset, 1) + ","; 
         j += "\"auto\":" + String(cfg_auto_mode ? 1 : 0) + ",";
         
         j += "\"m1_max\":" + String(cfg_m1_max_meters, 2) + ","; 

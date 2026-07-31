@@ -50,6 +50,7 @@ void webServerSetup() {
     });
     
     server.on("/save_cfg", HTTP_GET, [](AsyncWebServerRequest *request){
+        int oldCnt = cfg_motor_count;  // a change to motor count needs a reboot to (de)init driver 2
         if(request->hasParam("lat")) cfg_lat = request->getParam("lat")->value().toFloat();
         if(request->hasParam("lon")) cfg_lon = request->getParam("lon")->value().toFloat();
         if(request->hasParam("az")) cfg_win_az = request->getParam("az")->value().toInt();
@@ -70,6 +71,8 @@ void webServerSetup() {
         if(request->hasParam("m2_curr")) cfg_m2_current = request->getParam("m2_curr")->value().toInt();
         if(request->hasParam("m1_stall")) cfg_m1_stall = request->getParam("m1_stall")->value().toInt();
         if(request->hasParam("m2_stall")) cfg_m2_stall = request->getParam("m2_stall")->value().toInt();
+        if(request->hasParam("m1_inv")) cfg_m1_invert = (request->getParam("m1_inv")->value().toInt() == 1);
+        if(request->hasParam("m2_inv")) cfg_m2_invert = (request->getParam("m2_inv")->value().toInt() == 1);
 
         // Write to flash
         preferences.putFloat("lat", cfg_lat); preferences.putFloat("lon", cfg_lon); preferences.putInt("az", cfg_win_az);
@@ -86,10 +89,13 @@ void webServerSetup() {
         preferences.putInt("m2_curr", cfg_m2_current);
         preferences.putInt("m1_stall", cfg_m1_stall);
         preferences.putInt("m2_stall", cfg_m2_stall);
+        preferences.putBool("m1_inv", cfg_m1_invert);
+        preferences.putBool("m2_inv", cfg_m2_invert);
 
         // Apply Immediate Motor Changes
-        stepper1.setMaxSpeed(cfg_speed); 
-        if(cfg_motor_count > 1) stepper2.setMaxSpeed(cfg_speed);
+        stepper1.setMaxSpeed(cfg_speed);
+        stepper1.setPinsInverted(cfg_m1_invert, false, false);
+        if(cfg_motor_count > 1) { stepper2.setMaxSpeed(cfg_speed); stepper2.setPinsInverted(cfg_m2_invert, false, false); }
         
         // Apply individual currents and stalls immediately
         driver1.rms_current(cfg_m1_current); driver1.SGTHRS(cfg_m1_stall);
@@ -100,7 +106,9 @@ void webServerSetup() {
 
         configTime(cfg_gmt_offset * 3600, 0, "pool.ntp.org");
         Serial.println("Saved new config");
-        request->send(200, "text/plain", "Saved");
+        // Motor count changes driver 2 init, which only happens at boot.
+        if (cfg_motor_count != oldCnt) rebootRequested = true;
+        request->send(200, "text/plain", rebootRequested ? "Saved, rebooting" : "Saved");
     });
     
     server.on("/get_cfg", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -123,7 +131,9 @@ void webServerSetup() {
         j += "\"m1_curr\":" + String(cfg_m1_current) + ",";
         j += "\"m2_curr\":" + String(cfg_m2_current) + ",";
         j += "\"m1_stall\":" + String(cfg_m1_stall) + ",";
-        j += "\"m2_stall\":" + String(cfg_m2_stall);
+        j += "\"m2_stall\":" + String(cfg_m2_stall) + ",";
+        j += "\"m1_inv\":" + String(cfg_m1_invert ? 1 : 0) + ",";
+        j += "\"m2_inv\":" + String(cfg_m2_invert ? 1 : 0);
         j += "}";
         request->send(200, "application/json", j);
     });

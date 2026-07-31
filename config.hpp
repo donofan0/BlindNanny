@@ -49,6 +49,7 @@ String baseTopic;
 
 // --- PHYSICAL DIMENSIONS & CONFIG ---
 #define HOMEING_TIMEOUT_SECS 160
+#define HOME_BACKOFF_STEPS   200   // steps to reverse off the hard stop after a stall
 
 // --- CONFIG VARIABLES (Saved to Preferences) ---
 float cfg_lat = 42.4414;
@@ -73,6 +74,12 @@ int   cfg_m2_current = 800;
 int   cfg_m1_stall = 50;
 int   cfg_m2_stall = 50;
 
+// Per-motor direction invert. Flip if a blind (typically a mirrored right
+// blind) drives the wrong way, or if its hard stop is at the opposite end.
+// Default false = original behaviour, so existing installs are unchanged.
+bool  cfg_m1_invert = false;
+bool  cfg_m2_invert = false;
+
 // --- GLOBALS ---
 TMC2209Stepper driver1(&TMC_SERIAL_PORT, R_SENSE, 0b00);
 TMC2209Stepper driver2(&TMC_SERIAL_PORT, R_SENSE, 0b01);
@@ -91,6 +98,7 @@ long moveTarget = 0;  // Blind 1 (Left) target in steps, in M1's scale
 bool moveRequested2 = false;
 long moveTarget2 = 0; // Blind 2 (Right) target in steps, in M2's scale
 bool motorsEnabled = false;
+bool rebootRequested = false; // set when a structural config change needs a reboot
 
 void configSetup()
 {
@@ -116,6 +124,8 @@ void configSetup()
   cfg_m2_current = preferences.getInt("m2_curr", cfg_m2_current);
   cfg_m1_stall = preferences.getInt("m1_stall", cfg_m1_stall);
   cfg_m2_stall = preferences.getInt("m2_stall", cfg_m2_stall);
+  cfg_m1_invert = preferences.getBool("m1_inv", cfg_m1_invert);
+  cfg_m2_invert = preferences.getBool("m2_inv", cfg_m2_invert);
 
   configTime(cfg_gmt_offset * 3600, 0, "pool.ntp.org");
 }

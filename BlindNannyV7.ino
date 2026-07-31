@@ -36,4 +36,8 @@ void loop() {
     mqttLoop();
     blindLoop();
     solarLoop();
+
+    // A structural config change (e.g. motor count) asked for a reboot; give
+    // the HTTP response a moment to flush, then restart.
+    if (rebootRequested) { delay(300); ESP.restart(); }
 }

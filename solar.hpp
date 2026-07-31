@@ -74,14 +74,22 @@ int calculateSunPosition(float &azOut, float &elOut) {
 // Calculate updates based on sun path
 void updateSunTracking() {
     float az, el;
-    int targetPct = calculateSunPosition(az, el);
-    // Apply to motors natively based off Motor 1 scale
-    long steps = pctToSteps(targetPct);
-    long maxPos = getMaxPosition(1);
-    
-    if (abs(steps + stepper1.currentPosition()) > (maxPos/50)) {
-         moveTarget = steps;
-         moveRequested = true;
+    int targetPct = calculateSunPosition(az, el);   // percent closed needed to block glare
+
+    // Blind 1 (left), in M1's own scale, with a small deadband to avoid jitter.
+    long steps1 = pctToStepsMotor(targetPct, 1);
+    if (abs(steps1 + stepper1.currentPosition()) > (getMaxPosition(1) / 50)) {
+        moveTarget = steps1;
+        moveRequested = true;
+    }
+    // Blind 2 (right) must track too when fitted - previously it was left
+    // stationary in auto mode while only the left blind followed the sun.
+    if (cfg_motor_count > 1) {
+        long steps2 = pctToStepsMotor(targetPct, 2);
+        if (abs(steps2 + stepper2.currentPosition()) > (getMaxPosition(2) / 50)) {
+            moveTarget2 = steps2;
+            moveRequested2 = true;
+        }
     }
 }
 

@@ -106,6 +106,10 @@ const char index_html[] PROGMEM = R"rawliteral(
                     <div class="input-group"><label>M1 Sensitivity (least/0 - most/255)</label><input type="number" id="inp_m1_stall"></div>
                     <div class="input-group"><label>M2 Sensitivity (least/0 - most/255)</label><input type="number" id="inp_m2_stall"></div>
                 </div>
+                <div class="grid grid-cols-2 gap-3 mt-1">
+                    <label class="flex items-center gap-2 text-xs text-gray-400"><input type="checkbox" id="inp_m1_inv" class="w-4 h-4"> Invert M1 Dir</label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400"><input type="checkbox" id="inp_m2_inv" class="w-4 h-4"> Invert M2 Dir</label>
+                </div>
             </div>
 
             <h3 class="text-xs font-bold text-blue-400 mb-2 uppercase">Sun Tracking</h3>
@@ -254,7 +258,9 @@ const char index_html[] PROGMEM = R"rawliteral(
                 document.getElementById('inp_m2_curr').value = d.m2_curr;
                 document.getElementById('inp_m1_stall').value = d.m1_stall;
                 document.getElementById('inp_m2_stall').value = d.m2_stall;
-                
+                document.getElementById('inp_m1_inv').checked = d.m1_inv;
+                document.getElementById('inp_m2_inv').checked = d.m2_inv;
+
                 MAX_METERS = d.m1_max; // UI purely reflects M1 size
             });
         }
@@ -281,7 +287,9 @@ const char index_html[] PROGMEM = R"rawliteral(
                 m1_curr: document.getElementById('inp_m1_curr').value,
                 m2_curr: document.getElementById('inp_m2_curr').value,
                 m1_stall: document.getElementById('inp_m1_stall').value,
-                m2_stall: document.getElementById('inp_m2_stall').value
+                m2_stall: document.getElementById('inp_m2_stall').value,
+                m1_inv: document.getElementById('inp_m1_inv').checked ? 1 : 0,
+                m2_inv: document.getElementById('inp_m2_inv').checked ? 1 : 0
             };
             const params = new URLSearchParams(data).toString();
             fetch('/save_cfg?' + params).then(r => r.text()).then(() => { 

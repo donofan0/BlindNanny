@@ -66,28 +66,46 @@ void homeBlind(int id) {
     volatile bool* stalled = (id==1) ? &stalled1 : &stalled2;
     
     int stall_val = id == 1 ? cfg_m1_stall : cfg_m2_stall;
-    Serial.printf("Homing Blind %d with stall sensitivity %d/255...\n", id, cfg_m1_stall);
+    bool invertDir = (id==1) ? cfg_m1_invert : cfg_m2_invert;
+    Serial.printf("Homing Blind %d with stall sensitivity %d/255...\n", id, stall_val);
     digitalWrite((id==1 ? EN1_PIN : EN2_PIN), LOW);
-    s->stop(); 
-    
+    s->stop();
+
     attachInterrupt(digitalPinToInterrupt(diag), isr, RISING);
-    digitalWrite(dir, HIGH); // Moving 'up' against the hard stop
-    
+    digitalWrite(dir, invertDir ? LOW : HIGH); // drive toward the hard stop
+
     *stalled = false;
     unsigned long start = millis();
+    unsigned long steps = 0;
     while (!(*stalled) && ( (millis() - start) < (HOMEING_TIMEOUT_SECS * 1000) )) {
         digitalWrite(step, HIGH);
-        delayMicroseconds(200); 
+        delayMicroseconds(200);
         digitalWrite(step, LOW);
         delayMicroseconds(200);
-        yield(); 
+        yield();
+        // Keep WiFi/MQTT alive during this long blocking loop so the broker
+        // connection doesn't drop mid-calibration.
+        if ((++steps & 0x3FF) == 0) client.loop();
     }
-    
+
     detachInterrupt(digitalPinToInterrupt(diag));
+
+    // Relieve belt tension by backing a little off the hard stop, then zero
+    // the position there so a full-close move never slams the stop.
+    if (*stalled) {
+        digitalWrite(dir, invertDir ? HIGH : LOW); // reverse away from the stop
+        for (int i = 0; i < HOME_BACKOFF_STEPS; i++) {
+            digitalWrite(step, HIGH);
+            delayMicroseconds(200);
+            digitalWrite(step, LOW);
+            delayMicroseconds(200);
+            yield();
+        }
+    }
     s->setCurrentPosition(0); // Reset position locally based on individual constraints
-    digitalWrite((id==1 ? EN1_PIN : EN2_PIN), HIGH);  
-    
-    if (!*stalled) { 
+    digitalWrite((id==1 ? EN1_PIN : EN2_PIN), HIGH);
+
+    if (!*stalled) {
       Serial.printf("Blind %d Homing Timed Out!\n", id);
     }
     else
@@ -127,6 +145,7 @@ void blindSetup()
   }
   stepper1.setMaxSpeed(cfg_speed);
   stepper1.setAcceleration(ACCELERATION);
+  stepper1.setPinsInverted(cfg_m1_invert, false, false);
 
   // Conditional Driver 2 Init
   if (cfg_motor_count > 1) {
@@ -141,6 +160,7 @@ void blindSetup()
     }
     stepper2.setMaxSpeed(cfg_speed);
     stepper2.setAcceleration(ACCELERATION);
+    stepper2.setPinsInverted(cfg_m2_invert, false, false);
   }
 
   homeBlind(1);

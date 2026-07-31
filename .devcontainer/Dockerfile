@@ -16,6 +16,14 @@ USER root
 #   postgresql-client \
 #   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ── Arduino toolchain for building / verifying the ESP32 firmware ────────────
+# arduino-cli drives the compile; pyserial is required by the esp32 core's
+# build scripts. The ESP32 core + libraries are large, so they are installed
+# on first run by tools/compile.sh rather than baked into the image.
+RUN curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
+      | BINDIR=/usr/local/bin sh \
+ && pip3 install pyserial
+
 # ── Your project's Python deps ──────────────────────────────────────────────
 # The base ships CPython 3.10.20 (built from source) with pip on PATH and sets
 # PIP_BREAK_SYSTEM_PACKAGES=1, so plain pip3 install works.

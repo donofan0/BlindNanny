@@ -10,6 +10,7 @@
 
 #include <login.hpp>
 #include <config.hpp>
+#include <network.hpp>
 #include <blinds.hpp>
 #include <mqtt.hpp>
 #include <web.hpp>
@@ -20,12 +21,7 @@ void setup() {
 
     configSetup();
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    while (WiFi.status() != WL_CONNECTED) { 
-        delay(500); 
-        Serial.print("."); 
-    }
-    Serial.println(WiFi.localIP());
+    wifiSetup();
 
     blindSetup();
     mqttSetup();
@@ -33,6 +29,7 @@ void setup() {
 }
 
 void loop() {
+    wifiLoop();
     mqttLoop();
     blindLoop();
     solarLoop();

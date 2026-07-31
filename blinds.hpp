@@ -39,6 +39,14 @@ void requestBlindMove(int pctClosed, int which) {
   }
 }
 
+// Persist both blind positions to flash so they survive a power cut and the
+// device doesn't have to run a slow, noisy re-home on every boot.
+void savePositions() {
+  preferences.putLong("pos1", stepper1.currentPosition());
+  preferences.putLong("pos2", stepper2.currentPosition());
+  preferences.putBool("pos_valid", true);
+}
+
 // --- POWER MANAGEMENT ---
 // Enable or disable driver power to reduce heat
 void enableMotors(bool enabled) {
@@ -163,17 +171,27 @@ void blindSetup()
     stepper2.setPinsInverted(cfg_m2_invert, false, false);
   }
 
-  homeBlind(1);
-  homeBlind(2);
+  // Restore the last known positions instead of blocking on a boot-time home.
+  // Homing stays available on demand via the Calibrate command.
+  if (preferences.getBool("pos_valid", false)) {
+    stepper1.setCurrentPosition(preferences.getLong("pos1", 0));
+    stepper2.setCurrentPosition(preferences.getLong("pos2", 0));
+    Serial.println("Restored saved blind positions; skipping boot homing.");
+  } else {
+    homeBlind(1);
+    homeBlind(2);
+    savePositions();
+  }
 }
 
 void blindLoop()
 {
   // Process async homing
-  if (homeRequested) { 
-    homeBlind(1); 
+  if (homeRequested) {
+    homeBlind(1);
     homeBlind(2);
-    homeRequested = false; 
+    homeRequested = false;
+    savePositions();
   }
   
   // Process new movement positions safely. Blind 1 (left) and blind 2 (right)
@@ -199,12 +217,19 @@ void blindLoop()
   // --- POWER DOWN LOGIC ---
   // Check if either enabled motor is running to prevent overheating
   static unsigned long lastMoveTime = 0;
+  static bool posDirty = false;
   if (stepper1.isRunning() || ( (cfg_motor_count > 1) && stepper2.isRunning() )) {
     lastMoveTime = millis();
+    posDirty = true;              // a move is in progress; positions changed
   } else {
     // If stopped for > 2 seconds, disable motors entirely
     if (motorsEnabled && (millis() - lastMoveTime > 2000)) {
       enableMotors(false);
+    }
+    // Persist the final position once, after the blind has settled.
+    if (posDirty && (millis() - lastMoveTime > 2000)) {
+      savePositions();
+      posDirty = false;
     }
   }
 }

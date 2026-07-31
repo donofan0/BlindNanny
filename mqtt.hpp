@@ -2,79 +2,66 @@
 
 #include <login.hpp>
 
+String availTopic;   // MQTT Last-Will / availability topic (set in mqttSetup)
+
+// Shared "device" block so every entity groups under one HA device card,
+// with real name/manufacturer/model/version metadata.
+String devBlock() {
+    return "\"dev\":{\"ids\":[\"" + deviceId + "\"],"
+           "\"name\":\"BlindNanny\",\"mf\":\"BlindNanny\","
+           "\"mdl\":\"ESP32 Smart Blind\",\"sw\":\"7.3\"}";
+}
+
+// Shared availability block -> HA shows the device offline when the ESP drops.
+String availBlock() {
+    return "\"avty_t\":\"" + availTopic + "\","
+           "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"";
+}
+
 // Announce device to Home Assistant for auto-discovery
 void publishDiscovery() {
-  // 1. Cover Entity
-    String pl = "{ \
-        \"name\":\"Blind Position\", \
-        \"unique_id\":\"" + deviceId + "\", \
-        \"cmd_t\":\"" + baseTopic + "/command\", \
-        \"pos_t\":\"" + baseTopic + "/position\", \
-        \"set_pos_t\":\"" + baseTopic + "/set_position\", \
-        \"stat_t\":\"" + baseTopic + "/state\", \
-        \"pl_open\":\"OPEN\", \
-        \"pl_cls\":\"CLOSE\", \
-        \"pl_stop\":\"STOP\", \
-        \"pos_open\":100, \
-        \"pos_clsd\":0, \
-        \"dev\": { \
-            \"ids\":[\"" + deviceId + "\"] \
-        } \
-    }";
+    // 1. Cover Entity (controls both blinds together)
+    String pl = "{\"name\":null,"
+        "\"unique_id\":\"" + deviceId + "\","
+        "\"cmd_t\":\"" + baseTopic + "/command\","
+        "\"pos_t\":\"" + baseTopic + "/position\","
+        "\"set_pos_t\":\"" + baseTopic + "/set_position\","
+        "\"stat_t\":\"" + baseTopic + "/state\","
+        "\"pl_open\":\"OPEN\",\"pl_cls\":\"CLOSE\",\"pl_stop\":\"STOP\","
+        "\"pos_open\":100,\"pos_clsd\":0,"
+        "\"dev_cla\":\"blind\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/cover/" + deviceId + "/config").c_str(), pl.c_str(), true);
 
     // 2. Calibrate Button
-    String plCal = "{ \
-        \"name\":\"Calibrate Blinds\", \
-        \"unique_id\":\"" + deviceId + "_cal\", \
-        \"cmd_t\":\"" + baseTopic + "/calibrate\", \
-        \"icon\":\"mdi:arrow-collapse-down\", \
-        \"dev\": { \
-            \"ids\":[\"" + deviceId + "\"] \
-        } \
-    }";
+    String plCal = "{\"name\":\"Calibrate\","
+        "\"unique_id\":\"" + deviceId + "_cal\","
+        "\"cmd_t\":\"" + baseTopic + "/calibrate\","
+        "\"icon\":\"mdi:arrow-collapse-down\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/button/" + deviceId + "_cal/config").c_str(), plCal.c_str(), true);
 
     // 3. IP Address Sensor
-    String plIP = "{ \
-        \"name\":\"Blind IP Address\", \
-        \"unique_id\":\"" + deviceId + "_ip\", \
-        \"stat_t\":\"" + baseTopic + "/ip_address\", \
-        \"icon\":\"mdi:ip-network\", \
-        \"dev\":{ \
-            \"ids\":[\"" + deviceId + "\"] \
-        } \
-    }";
+    String plIP = "{\"name\":\"IP Address\","
+        "\"unique_id\":\"" + deviceId + "_ip\","
+        "\"stat_t\":\"" + baseTopic + "/ip_address\","
+        "\"icon\":\"mdi:ip-network\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/sensor/" + deviceId + "_ip/config").c_str(), plIP.c_str(), true);
 
-    // 4. Slider (Replaced by main Blind control)
-    String plSl = "{ \
-        \"name\":\"Blind % Closed\", \
-        \"unique_id\":\"" + deviceId + "_pct\", \
-        \"cmd_t\":\"" + baseTopic + "/set_pct_closed\", \
-        \"stat_t\":\"" + baseTopic + "/pct_closed\", \
-        \"min\":0, \
-        \"max\":100, \
-        \"icon\":\"mdi:blinds\", \
-        \"dev\":{ \
-            \"ids\":[\"" + deviceId + "\"] \
-        } \
-    }";
+    // 4. Slider (percent closed)
+    String plSl = "{\"name\":\"Percent Closed\","
+        "\"unique_id\":\"" + deviceId + "_pct\","
+        "\"cmd_t\":\"" + baseTopic + "/set_pct_closed\","
+        "\"stat_t\":\"" + baseTopic + "/pct_closed\","
+        "\"min\":0,\"max\":100,\"unit_of_meas\":\"%\","
+        "\"icon\":\"mdi:blinds\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/number/" + deviceId + "_pct/config").c_str(), plSl.c_str(), true);
-    
+
     // 5. Auto Switch
-    String plAuto = "{ \
-        \"name\":\"Blind Auto Mode\", \
-        \"unique_id\":\"" + deviceId + "_auto\", \
-        \"cmd_t\":\"" + baseTopic + "/set_auto\", \
-        \"stat_t\":\"" + baseTopic + "/auto_state\", \
-        \"pl_on\":\"ON\", \
-        \"pl_off\":\"OFF\", \
-        \"icon\":\"mdi:sun-clock\", \
-        \"dev\":{ \
-            \"ids\":[\"" + deviceId + "\"] \
-        } \
-    }";
+    String plAuto = "{\"name\":\"Auto Sun-Block\","
+        "\"unique_id\":\"" + deviceId + "_auto\","
+        "\"cmd_t\":\"" + baseTopic + "/set_auto\","
+        "\"stat_t\":\"" + baseTopic + "/auto_state\","
+        "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
+        "\"icon\":\"mdi:sun-clock\"," + availBlock() + "," + devBlock() + "}";
     client.publish(("homeassistant/switch/" + deviceId + "_auto/config").c_str(), plAuto.c_str(), true);
 }
 
@@ -83,24 +70,31 @@ void publishState() {
     if (!client.connected()) return;
     long pos = stepper1.currentPosition();
     long maxPos = getMaxPosition(1);
-    int pct = map(pos, -maxPos, 0, 0, 100);
-    float m = ((float)pct / 100.0f) * cfg_m1_max_meters;
-    
+    // pos runs from -maxPos (fully open) to 0 (fully closed)
+    int pct = constrain((int)map(pos, -maxPos, 0, 0, 100), 0, 100);
+
     client.publish((baseTopic + "/pct_closed").c_str(), String(pct).c_str());
     client.publish((baseTopic + "/position").c_str(), String(100 - pct).c_str());
     client.publish((baseTopic + "/ip_address").c_str(), WiFi.localIP().toString().c_str());
-    
+
+    // Report cover state off the percent-closed value. The old test used the
+    // raw (negative) position, so `pos <= 0` was always true and HA saw the
+    // cover permanently "open".
     String state = "stopped";
-    if(stepper1.isRunning()) state = (stepper1.speed() > 0) ? "closing" : "opening";
-    else if(pos <= 0) state = "open";
-    else if(pos >= maxPos) state = "closed";
+    if(stepper1.isRunning()) state = (stepper1.distanceToGo() > 0) ? "closing" : "opening";
+    else if(pct >= 99) state = "closed";
+    else if(pct <= 1) state = "open";
     client.publish((baseTopic + "/state").c_str(), state.c_str());
 }
 
 // reconnect to mqtt
 void reconnect() {
     if (!client.connected()) {
-        if (client.connect(deviceId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+        // Register a retained Last-Will so HA marks the device offline if the
+        // ESP drops off the network unexpectedly.
+        if (client.connect(deviceId.c_str(), MQTT_USER, MQTT_PASSWORD,
+                           availTopic.c_str(), 0, true, "offline")) {
+            client.publish(availTopic.c_str(), "online", true);
             client.subscribe((baseTopic + "/command").c_str());
             client.subscribe((baseTopic + "/set_position").c_str());
             client.subscribe((baseTopic + "/set_pct_closed").c_str());
@@ -167,7 +161,8 @@ void mqttSetup() {
     String mac = WiFi.macAddress();
     mac.replace(":", "");
     deviceId = "blind_" + mac.substring(6);
-    baseTopic = "home/blinds/" + deviceId; 
+    baseTopic = "home/blinds/" + deviceId;
+    availTopic = baseTopic + "/availability";
     Serial.println("mqtt device ID is " + deviceId);
 
     client.setServer(MQTT_SERVER, MQTT_PORT);
